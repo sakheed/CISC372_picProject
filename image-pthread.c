@@ -52,73 +52,71 @@ uint8_t getPixelValue(Image* srcImage,int x,int y,int bit,Matrix algorithm){
     return result;
 }
 
-void* parallelize(void* threads_args){
-    Thread_args* thread_args = (Thread_args*) threads_args;
-    Image* srcImage= thread_args->srcImage;
-    Image* destImage= thread_args->destImage;
+
+void* convolute(void* thread_args){
+    ARGUMENTS* args = (ARGUMENTS*) thread_args;
+    Image* srcImage= args->srcImage;
+    Image* destImage= args->destImage;
     Matrix algorithm;  
-    
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            algorithm[i][j] = thread_args->algorithm[i][j];
-        }
-    }
-    int rank = thread_args->rank;
+
     int row,pix,bit,span;
-    
+    int rank = args->rank;
+
     //setting thread count to a constant number of threads
     int thread_count = 5;
     
-    span=srcImage->bpp*srcImage->bpp;
-    
-    if(rank+1 == thread_count){
-        for (row=rank*(srcImage->height/thread_count);row<srcImage->height;row++){
-            for (pix=0;pix<srcImage->width;pix++){
-                for (bit=0;bit<srcImage->bpp;bit++){
-                    destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
-                }
-            }
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            algorithm[i][j] = args->algorithm[i][j];
         }
+    }
+
+    int firstRank = rank*(srcImage->height/thread_count);
+    int lastRank;
+    
+    if (rank < thread_count - 1){ 
+        lastRank = srcImage-> height;
     }
     else{
-        for (row=rank*(srcImage->height/thread_count);row<(rank+1)*(srcImage->height/thread_count);row++){
-            for (pix=0;pix<srcImage->width;pix++){
-                for (bit=0;bit<srcImage->bpp;bit++){
-                    destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
-                }
+        lastRank = (rank+1)*(srcImage->height/thread_count);
+    }
+    
+    for (row=firstRank;row<lastRank;row++){
+        for (pix=0;pix<srcImage->width;pix++){
+            for (bit=0;bit<srcImage->bpp;bit++){
+                destImage->data[Index(pix,row,srcImage->width,bit,srcImage->bpp)]=getPixelValue(srcImage,pix,row,bit,algorithm);
             }
         }
     }
+    return NULL;
 }
 
-//convolute:  Applies a kernel matrix to an image
-//Parameters: srcImage: The image being convoluted
-//            destImage: A pointer to a  pre-allocated (including space for the pixel array) structure to receive the convoluted image.  It should be the same size as srcImage
-//            algorithm: The kernel matrix to use for the convolution
-//Returns: Nothing
-void convolute(Image* srcImage,Image* destImage,Matrix algorithm, int thread_count){
+
+void parallelize(Image* srcImage,Image* destImage,Matrix algorithm, int thread_count){
     
-    pthread_t* thread_handles;
-    thread_handles = (pthread_t*)malloc(thread_count*sizeof(pthread_t));
+    pthread_t* thread_size;
+    thread_size = (pthread_t*)malloc(thread_count*sizeof(pthread_t));
     
     for (int i = 0; i<thread_count;++i){
-        Thread_args* thread_args = (struct Thread_args*)malloc(sizeof(struct Thread_args));
-        thread_args->destImage = destImage;
-        thread_args->srcImage = srcImage;
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                thread_args->algorithm[i][j] = algorithm[i][j];
+        ARGUMENTS* args = (struct ARGUMENTS*)malloc(sizeof(struct ARGUMENTS));
+        args->destImage = destImage;
+        args->srcImage = srcImage;
+        
+        for (int j = 0; j < 3; j++) {
+            for (int k = 0; k < 3; k++) {
+                args->algorithm[j][k] = algorithm[j][k];
             }
         }
-        thread_args->thread_count = thread_count;
-        thread_args->rank = i;
-        pthread_create(&thread_handles[i], NULL, &parallelize, (void*) thread_args);
+        args->thread_count = thread_count;
+        args->rank = i;
+        
+        pthread_create(&thread_size[i], NULL, &convolute, (void*) args);
     }
     for(int i = 0; i<thread_count;++i){
-        pthread_join(thread_handles[i], NULL);
+        pthread_join(thread_size[i], NULL);
     }
     
-    free(thread_handles);
+    free(thread_size);
 }
 
 //Usage: Prints usage information for the program
@@ -167,7 +165,9 @@ int main(int argc,char** argv){
     destImage.height=srcImage.height;
     destImage.width=srcImage.width;
     destImage.data=malloc(sizeof(uint8_t)*destImage.width*destImage.bpp*destImage.height);
-    convolute(&srcImage,&destImage,algorithms[type],thread_count);
+    
+    parallelize(&srcImage,&destImage,algorithms[type],thread_count);
+    
     stbi_write_png("output.png",destImage.width,destImage.height,destImage.bpp,destImage.data,destImage.bpp*destImage.width);
     stbi_image_free(srcImage.data);
     
