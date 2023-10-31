@@ -1,0 +1,17 @@
+cript started on Mon Oct 30 22:04:34 2023
+[sakheed@r1n09 CISC372_picProject]$ make image-openmp
+gcc image-openmp.c -o image-openmp  -fopenmp -lm
+[sakheed@r1n09 CISC372_picProject]$ srun ./image-openmp pic1.jpg edge
+Took 6 seconds
+[sakheed@r1n09 CISC372_picProject]$ make clean
+rm -f image image-pthread image-openmp output.png
+\rm -rf *.dSYM
+[sakheed@r1n09 CISC372_picProject]$ make image-pthread
+gcc -std=c99 image-pthread.c -o image-pthread -lpthread -lm
+[sakheed@r1n09 CISC372_picProject]$ srun ./image-pthread pic1.jpg edge
+Took 6 seconds
+[sakheed@r1n09 CISC372_picProject]$ make clean
+rm -f image image-pthread image-openmp output.png
+\rm -rf *.dSYM
+[sakheed@r1n09 CISC372_picProject]$ exit
+exit
