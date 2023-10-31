@@ -62,7 +62,7 @@ void convolute(Image* srcImage,Image* destImage,Matrix algorithm){
     span=srcImage->bpp*srcImage->bpp;
     
     //setting thread count to a constant number of threads
-    int thread_count = 5 
+    int thread_count = 5;
     //adding one line pragma 
     #pragma omp parallel for num_threads(thread_count) private(row, pix,bit)
     
